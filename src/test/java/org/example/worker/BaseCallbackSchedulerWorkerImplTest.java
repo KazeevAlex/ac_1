@@ -22,7 +22,7 @@ class BaseCallbackSchedulerWorkerImplTest {
     }
 
     @AfterEach
-    void tearDown() throws Exception {
+    void tearDown() {
         worker.stop();
     }
 
@@ -38,12 +38,12 @@ class BaseCallbackSchedulerWorkerImplTest {
         String laterCallbackRecord = "later callback record";
 
         Runnable earlierCallback = () -> {
-            resultQueue.offer(earlierCallbackRecord);
+            resultQueue.add(earlierCallbackRecord);
             latch.countDown();
         };
 
         Runnable laterCallback = () -> {
-            resultQueue.offer(laterCallbackRecord);
+            resultQueue.add(laterCallbackRecord);
             latch.countDown();
         };
 
@@ -58,11 +58,37 @@ class BaseCallbackSchedulerWorkerImplTest {
     }
 
     @Test
-    void testScheduleAfterStop() throws Exception {
+    void testScheduleAfterStop() {
         worker.stop();
         assertThrows(
                 IllegalStateException.class,
                 () -> worker.submit(new ScheduledCallback(()->{}, Instant.now()))
         );
+    }
+
+    @Test
+    void testCallbackThrowsException() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(2);
+        BlockingQueue<String> resultQueue = new LinkedBlockingQueue<>();
+
+        String successfulCallbackRecord = "successful callback record";
+
+        Runnable throwingCallback = () -> {
+            latch.countDown();
+            throw new RuntimeException("Test exception from callback");
+        };
+
+        Runnable successfulCallback = () -> {
+            resultQueue.add(successfulCallbackRecord);
+            latch.countDown();
+        };
+
+        worker.submit(new ScheduledCallback(throwingCallback, Instant.now().plusMillis(10)));
+        worker.submit(new ScheduledCallback(successfulCallback, Instant.now().plusMillis(20)));
+
+        latch.await();
+
+        assertEquals(1, resultQueue.size());
+        assertEquals(successfulCallbackRecord, resultQueue.poll());
     }
 }

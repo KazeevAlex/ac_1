@@ -29,7 +29,7 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
         lock.lock();
         try {
             if (!isActive()) {
-                throw new IllegalStateException();
+                throw new IllegalStateException("Worker is not active.");
             }
             workQueue.offer(scheduledCallback);
             condition.signal(); // для реализации ожидания через condition
@@ -42,16 +42,25 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
         return () -> {
             while (isActive()) {
                 lock.lock();
+                ScheduledCallback callback = null;
                 try {
 //                    sleepWaitingImplementation();
                     conditionWaitingImplementation();
+                    callback = workQueue.remove();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    break;
                 } finally {
                     lock.unlock();
                 }
-                workQueue.remove().callback().run();
+                try {
+                    if (callback == null) {
+                        continue;
+                    }
+                    callback.callback().run();
+                } catch (Exception e) {
+                    // In a real application, use a proper logging framework.
+                    System.err.println("Callback execution failed: " + e.getMessage());
+                }
             }
         };
     }

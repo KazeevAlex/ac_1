@@ -4,15 +4,20 @@ import org.example.model.ScheduledCallback;
 import org.example.worker.CallbackSchedulerWorker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class BaseCallbackSchedulerImplTest {
@@ -25,40 +30,40 @@ class BaseCallbackSchedulerImplTest {
 
     @Test
     void testSuccessfulSchedule() {
-        scheduler.schedule(()->{}, Instant.now());
+        when(worker.isActive()).thenReturn(true);
+        scheduler.schedule(()->{}, Instant.now().plusMillis(10));
         verify(worker).submit(any(ScheduledCallback.class));
     }
 
-    @Test
-    void testNullCallback() {
-        assertThrows(
-                NullPointerException.class,
-                () -> scheduler.schedule(null, Instant.now())
-        );
+    @ParameterizedTest
+    @MethodSource("invalidArguments")
+    void testInvalidArguments(Runnable callback, Instant when, Class<? extends Throwable> exceptionClass) {
+        when(worker.isActive()).thenReturn(true);
+        assertThrows(exceptionClass, () -> scheduler.schedule(callback, when));
     }
 
-    @Test
-    void testNullWhen() {
-        assertThrows(
-                NullPointerException.class,
-                () -> scheduler.schedule(() -> {}, null)
-        );
-    }
-
-    @Test
-    void testIllegalWhen() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> scheduler.schedule(() -> {}, Instant.now().minusMillis(10))
+    private static Stream<Arguments> invalidArguments() {
+        Runnable emptyCallback = () -> {};
+        return Stream.of(
+                Arguments.of(null, Instant.now(), NullPointerException.class),
+                Arguments.of(emptyCallback, null, NullPointerException.class),
+                Arguments.of(emptyCallback, Instant.now().minusMillis(10), IllegalArgumentException.class)
         );
     }
 
     @Test
     void testScheduleAfterClose() {
+        when(worker.isActive()).thenReturn(false);
         scheduler.close();
         assertThrows(
                 IllegalStateException.class,
                 () -> scheduler.schedule(() -> {}, Instant.now())
         );
+    }
+
+    @Test
+    void testClose() {
+        scheduler.close();
+        verify(worker).stop();
     }
 }

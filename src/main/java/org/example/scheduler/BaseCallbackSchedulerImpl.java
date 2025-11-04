@@ -1,45 +1,44 @@
 package org.example.scheduler;
 
-import org.example.worker.CallbackSchedulerWorker;
 import org.example.model.ScheduledCallback;
+import org.example.worker.CallbackSchedulerWorker;
 
 import java.time.Instant;
+import java.util.Objects;
 
 public class BaseCallbackSchedulerImpl implements CallbackScheduler {
 
     private final CallbackSchedulerWorker worker;
 
     public BaseCallbackSchedulerImpl(CallbackSchedulerWorker worker) {
+        Objects.requireNonNull(worker, "Worker must not be null");
         this.worker = worker;
     }
-
-    private volatile boolean active = true;
 
     @Override
     public void schedule(Runnable callback, Instant when) {
         if (!isActive()) {
-            throw new IllegalStateException();
+            throw new IllegalStateException("Scheduler is shut down");
         }
         validateArguments(callback, when);
         worker.submit(new ScheduledCallback(callback, when));
     }
 
     private void validateArguments(Runnable callback, Instant when) {
-        if (callback == null || when == null) {
-            throw new NullPointerException();
-        }
+        Objects.requireNonNull(callback, "Callback must not be null");
+        Objects.requireNonNull(when, "Execution time 'when' must not be null");
+
         if (when.isBefore(Instant.now())) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("Execution time must be in the future");
         }
     }
 
     private boolean isActive() {
-        return active || worker.isActive();
+        return worker.isActive();
     }
 
     @Override
     public void close() {
         worker.stop();
-        active = false;
     }
 }
