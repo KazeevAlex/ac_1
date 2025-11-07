@@ -25,6 +25,10 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
 
     public BaseCallbackSchedulerWorkerImpl() {
         worker = new Thread(getSchedulerTask());
+        worker.setUncaughtExceptionHandler((thread, exception) ->
+                // In a real application, use a proper logging framework.
+                System.err.println("Worker execution failed: " + exception.getMessage()));
+
         worker.start();
     }
 
@@ -52,7 +56,8 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
                     conditionWaitingImplementation();
                     callback = workQueue.remove();
                 } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+                    // In a real application, use a proper logging framework.
+                    System.err.println("Worker was interrupted: " + e.getMessage());
                 } finally {
                     lock.unlock();
                 }
@@ -124,6 +129,5 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
     @Override
     public void terminateForcibly() {
         terminated = true;
-        worker.interrupt();
     }
 }
