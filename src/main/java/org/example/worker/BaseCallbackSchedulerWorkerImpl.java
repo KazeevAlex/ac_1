@@ -12,8 +12,8 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker {
 
-    public static final int AWAIT_TERMINATION_MILLIS = 200;
-    public static final int WAITING_SLEEP_TIME_MILLIS = 100;
+    private static final int AWAIT_TERMINATION_MILLIS = 200;
+    private static final int WAITING_SLEEP_TIME_MILLIS = 100;
 
     private final Thread worker;
     private final Queue<ScheduledCallback> workQueue = new PriorityQueue<>();
