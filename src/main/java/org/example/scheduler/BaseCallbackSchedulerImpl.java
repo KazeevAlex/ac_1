@@ -9,6 +9,9 @@ import java.util.Objects;
 public class BaseCallbackSchedulerImpl implements CallbackScheduler {
 
     private final CallbackSchedulerWorker worker;
+    private final SchedulerValidator schedulerValidator = new SchedulerValidator();
+
+    private volatile boolean running = true;
 
     public BaseCallbackSchedulerImpl(CallbackSchedulerWorker worker) {
         Objects.requireNonNull(worker, "Worker must not be null");
@@ -17,28 +20,24 @@ public class BaseCallbackSchedulerImpl implements CallbackScheduler {
 
     @Override
     public void schedule(Runnable callback, Instant when) {
-        if (!isActive()) {
+        if (!isRunning()) {
             throw new IllegalStateException("Scheduler is shut down");
         }
-        validateArguments(callback, when);
+        schedulerValidator.validateArguments(callback, when);
         worker.submit(new ScheduledCallback(callback, when));
     }
 
-    private void validateArguments(Runnable callback, Instant when) {
-        Objects.requireNonNull(callback, "Callback must not be null");
-        Objects.requireNonNull(when, "Execution time 'when' must not be null");
-
-        if (when.isBefore(Instant.now())) {
-            throw new IllegalArgumentException("Execution time must be in the future");
-        }
-    }
-
-    private boolean isActive() {
-        return worker.isActive();
+    private boolean isRunning() {
+        return running;
     }
 
     @Override
     public void close() {
-        worker.stop();
+        running = false;
+        worker.awaitTermination();
+
+        if (!worker.isTerminated()) {
+            worker.terminateForcibly();
+        }
     }
 }
