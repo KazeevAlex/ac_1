@@ -30,7 +30,6 @@ class BaseCallbackSchedulerImplTest {
 
     @Test
     void testSuccessfulSchedule() {
-        when(worker.isActive()).thenReturn(true);
         scheduler.schedule(()->{}, Instant.now().plusMillis(10));
         verify(worker).submit(any(ScheduledCallback.class));
     }
@@ -38,7 +37,6 @@ class BaseCallbackSchedulerImplTest {
     @ParameterizedTest
     @MethodSource("invalidArguments")
     void testInvalidArguments(Runnable callback, Instant when, Class<? extends Throwable> exceptionClass) {
-        when(worker.isActive()).thenReturn(true);
         assertThrows(exceptionClass, () -> scheduler.schedule(callback, when));
     }
 
@@ -53,7 +51,7 @@ class BaseCallbackSchedulerImplTest {
 
     @Test
     void testScheduleAfterClose() {
-        when(worker.isActive()).thenReturn(false);
+        when(worker.isTerminated()).thenReturn(true);
         scheduler.close();
         assertThrows(
                 IllegalStateException.class,
@@ -64,6 +62,6 @@ class BaseCallbackSchedulerImplTest {
     @Test
     void testClose() {
         scheduler.close();
-        verify(worker).stop();
+        verify(worker).awaitTermination();
     }
 }
