@@ -23,7 +23,7 @@ class BaseCallbackSchedulerWorkerImplTest {
 
     @AfterEach
     void tearDown() {
-        worker.stop();
+        worker.terminateForcibly();
     }
 
     @Test
@@ -58,8 +58,8 @@ class BaseCallbackSchedulerWorkerImplTest {
     }
 
     @Test
-    void testScheduleAfterStop() {
-        worker.stop();
+    void testScheduleAfterTerminateForcibly() {
+        worker.terminateForcibly();
         assertThrows(
                 IllegalStateException.class,
                 () -> worker.submit(new ScheduledCallback(()->{}, Instant.now()))
