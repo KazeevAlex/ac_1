@@ -12,12 +12,16 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker {
 
+    public static final int AWAIT_TERMINATION_MILLIS = 200;
     public static final int WAITING_SLEEP_TIME_MILLIS = 100;
 
     private final Thread worker;
     private final Queue<ScheduledCallback> workQueue = new PriorityQueue<>();
     private final ReentrantLock lock = new ReentrantLock(true);
-    private final Condition condition = lock.newCondition();
+    private final Condition workCondition = lock.newCondition();
+    private final Condition terminationCondition = lock.newCondition();
+
+    private volatile boolean terminated = false;
 
     public BaseCallbackSchedulerWorkerImpl() {
         worker = new Thread(getSchedulerTask());
@@ -28,11 +32,11 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
     public void submit(ScheduledCallback scheduledCallback) {
         lock.lock();
         try {
-            if (!isActive()) {
-                throw new IllegalStateException("Worker is not active.");
+            if (isTerminated()) {
+                throw new IllegalStateException("Worker is terminated.");
             }
             workQueue.offer(scheduledCallback);
-            condition.signal(); // для реализации ожидания через condition
+            workCondition.signal(); // для реализации ожидания через condition
         } finally {
             lock.unlock();
         }
@@ -40,7 +44,7 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
 
     private Runnable getSchedulerTask() {
         return () -> {
-            while (isActive()) {
+            while (!isTerminated()) {
                 lock.lock();
                 ScheduledCallback callback = null;
                 try {
@@ -73,11 +77,11 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
 
     private void conditionWaitingImplementation() throws InterruptedException {
         while (workQueue.isEmpty()) {
-            condition.await();
+            workCondition.await();
         }
         while (isNotCallbackTime()) {
             var callbackDeadline = workQueue.peek().when();
-            condition.awaitUntil(Date.from(callbackDeadline));
+            workCondition.awaitUntil(Date.from(callbackDeadline));
         }
     }
 
@@ -87,12 +91,39 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
     }
 
     @Override
-    public boolean isActive() {
-        return !worker.isInterrupted();
+    public boolean isTerminated() {
+        return terminated;
     }
 
     @Override
-    public void stop() {
+    public void awaitTermination() {
+        submit(getScheduledTermination());
+        waitTermination();
+    }
+
+    private ScheduledCallback getScheduledTermination() {
+        Runnable terminationTask = () -> {
+            terminateForcibly();
+            terminationCondition.signal();
+        };
+        var when = Instant.now().plusMillis(AWAIT_TERMINATION_MILLIS);
+        return new ScheduledCallback(terminationTask, when);
+    }
+
+    private void waitTermination() {
+        var when = Instant.now().plusMillis(AWAIT_TERMINATION_MILLIS);
+        while (Instant.now().isBefore(when)) {
+            try {
+                terminationCondition.awaitUntil(Date.from(when));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    @Override
+    public void terminateForcibly() {
+        terminated = true;
         worker.interrupt();
     }
 }

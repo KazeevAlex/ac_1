@@ -6,7 +6,9 @@ public interface CallbackSchedulerWorker {
 
     void submit(ScheduledCallback scheduledCallback);
 
-    boolean isActive();
+    boolean isTerminated();
 
-    void stop();
+    void awaitTermination();
+
+    void terminateForcibly();
 }
