@@ -97,7 +97,7 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
 
     @Override
     public boolean isTerminated() {
-        return terminated;
+        return terminated && worker.isAlive();
     }
 
     @Override
