@@ -19,7 +19,6 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
     private final Queue<ScheduledCallback> workQueue = new PriorityQueue<>();
     private final ReentrantLock lock = new ReentrantLock(true);
     private final Condition workCondition = lock.newCondition();
-    private final Condition terminationCondition = lock.newCondition();
 
     private volatile boolean terminated = false;
 
@@ -107,10 +106,7 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
     }
 
     private ScheduledCallback getScheduledTermination() {
-        Runnable terminationTask = () -> {
-            terminateForcibly();
-            terminationCondition.signal();
-        };
+        Runnable terminationTask = this::terminateForcibly;
         var when = Instant.now().plusMillis(AWAIT_TERMINATION_MILLIS);
         return new ScheduledCallback(terminationTask, when);
     }
@@ -119,7 +115,7 @@ public class BaseCallbackSchedulerWorkerImpl implements CallbackSchedulerWorker 
         var when = Instant.now().plusMillis(AWAIT_TERMINATION_MILLIS);
         while (Instant.now().isBefore(when)) {
             try {
-                terminationCondition.awaitUntil(Date.from(when));
+                TimeUnit.MILLISECONDS.sleep(AWAIT_TERMINATION_MILLIS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
